@@ -497,13 +497,16 @@ static void ProcessExclusiveOutcast(DevAscendFunction* devFunc, size_t outIdx, s
 
 static void ProcessDevFunctionOutcasts(WorkspaceDesc::WorkspacePerRootFunctionDesc& rootMem, Function* func,
                                        DevAscendFunction* devFunc, std::vector<FlexSlotInfo>& slots,
-                                       uint64_t& maxExclusiveOutcastMem)
+                                       const std::unordered_set<int>& constructAssembleNeedAllocSlots,
+                                       uint64_t& maxExclusiveOutcastMem, uint64_t& rootNeedAllocAssembleSlotCount)
 {
     rootMem.func = func;
     rootMem.devFuncName = devFunc->GetRawName();
     rootMem.unroll = devFunc->unrollTimes;
     uint64_t maxStaticMemReq = 0;
     int64_t maxStaticMemReqIdx = -1;
+    // Distinct NeedAlloc assemble slots this root writes (per-root A_i for A_max).
+    std::unordered_set<int> rootNeedAllocAssembleSlots;
     for (size_t i = 0; i < devFunc->GetOutcastSize(); i++) {
         if (IsInputOutputSlot(slots, devFunc, i)) {
             continue;
@@ -512,12 +515,20 @@ static void ProcessDevFunctionOutcasts(WorkspaceDesc::WorkspacePerRootFunctionDe
         uint64_t staticMemReq = devFunc->GetOutcastRawTensor(i)->maxStaticMemReq;
         if (IsAssembleSlot(slots, devFunc, i)) {
             ProcessAssembleOutcast(func, devFunc, i, slots, staticMemReq);
+            auto& toSlotList = devFunc->GetOutcast(i).toSlotList;
+            for (size_t j = 0; j < toSlotList.size(); j++) {
+                int slotIdx = devFunc->At(toSlotList, j);
+                if (constructAssembleNeedAllocSlots.count(slotIdx) != 0) {
+                    rootNeedAllocAssembleSlots.insert(slotIdx);
+                }
+            }
         } else {
             ProcessExclusiveOutcast(devFunc, i, slots);
             maxStaticMemReq = std::max(maxStaticMemReq, staticMemReq);
             maxStaticMemReqIdx = static_cast<int64_t>(i);
         }
     }
+    rootNeedAllocAssembleSlotCount = static_cast<uint64_t>(rootNeedAllocAssembleSlots.size());
     rootMem.rootMaxExclusiveOutcastMem = maxStaticMemReq;
     rootMem.rootMaxExclusiveOutcastIdx = maxStaticMemReqIdx;
     rootMem.rootInnerSpilledRawMem = devFunc->rootInnerTensorWsMemoryRequirement;
@@ -648,14 +659,19 @@ void BuildDynamicCellMatchLaunchMeta(Function* func, DevAscendProgram& devProg)
 }
 
 static void AccumulateRootFunctionIntoWorkspaceDesc(WorkspaceDesc& desc, Function* func, DevAscendFunction* devFunc,
-                                                    std::vector<FlexSlotInfo>& slots, uint64_t& maxExclusiveOutcastMem,
+                                                    std::vector<FlexSlotInfo>& slots,
+                                                    const std::unordered_set<int>& constructAssembleNeedAllocSlots,
+                                                    uint64_t& maxExclusiveOutcastMem,
                                                     uint64_t& maxRootMaxExclusiveOutcastMem,
                                                     uint64_t& maxPerCoreSpilledMem)
 {
     WorkspaceDesc::WorkspacePerRootFunctionDesc rootMem;
-    ProcessDevFunctionOutcasts(rootMem, func, devFunc, slots, maxExclusiveOutcastMem);
+    uint64_t rootNeedAllocAssembleSlotCount = 0;
+    ProcessDevFunctionOutcasts(rootMem, func, devFunc, slots, constructAssembleNeedAllocSlots, maxExclusiveOutcastMem,
+                               rootNeedAllocAssembleSlotCount);
     maxPerCoreSpilledMem = std::max(maxPerCoreSpilledMem, rootMem.leafPerCoreSpilledMem);
     maxRootMaxExclusiveOutcastMem = std::max(maxRootMaxExclusiveOutcastMem, rootMem.rootMaxExclusiveOutcastMem);
+    desc.maxRootAssembleOutcastSlot = std::max(desc.maxRootAssembleOutcastSlot, rootNeedAllocAssembleSlotCount);
     desc.rootFuncDescList.push_back(std::move(rootMem));
 }
 
@@ -696,8 +712,9 @@ WorkspaceDesc CollectWorkspaceDesc(Function* func, DevAscendProgram& devProg,
             continue;
         }
         DevAscendFunction* devFunc = reinterpret_cast<DevAscendFunction*>(const_cast<uint8_t*>(data));
-        AccumulateRootFunctionIntoWorkspaceDesc(desc, func, devFunc, slots, maxExclusiveOutcastMem,
-                                                maxRootMaxExclusiveOutcastMem, maxPerCoreSpilledMem);
+        AccumulateRootFunctionIntoWorkspaceDesc(desc, func, devFunc, slots, constructAssembleNeedAllocSlots,
+                                                maxExclusiveOutcastMem, maxRootMaxExclusiveOutcastMem,
+                                                maxPerCoreSpilledMem);
     }
 
     FinalizeWorkspaceDescSlotBudgets(desc, slots, constructAssembleNeedAllocSlots, maxPerCoreSpilledMem,
@@ -738,8 +755,9 @@ WorkspaceDesc CollectWorkspaceDescFromHostEncodeList(Function* func, const Dynde
             continue;
         }
         DevAscendFunction* devFunc = reinterpret_cast<DevAscendFunction*>(const_cast<uint8_t*>(devEncodeBin.data()));
-        AccumulateRootFunctionIntoWorkspaceDesc(desc, func, devFunc, slots, maxExclusiveOutcastMem,
-                                                maxRootMaxExclusiveOutcastMem, maxPerCoreSpilledMem);
+        AccumulateRootFunctionIntoWorkspaceDesc(desc, func, devFunc, slots, constructAssembleNeedAllocSlots,
+                                                maxExclusiveOutcastMem, maxRootMaxExclusiveOutcastMem,
+                                                maxPerCoreSpilledMem);
     }
 
     FinalizeWorkspaceDescSlotBudgets(desc, slots, constructAssembleNeedAllocSlots, maxPerCoreSpilledMem,

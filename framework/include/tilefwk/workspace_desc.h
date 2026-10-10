@@ -66,6 +66,7 @@ struct WorkspaceDesc {
 
     uint64_t totalExclusiveOutcastSlot{0};
     uint64_t totalAssembleOutcastSlot{0};
+    uint64_t maxRootAssembleOutcastSlot{0};
     uint64_t devTaskBoundaryOutcastNum{0};
     uint64_t devTaskInnerTemporalOutcastNum{0};
 

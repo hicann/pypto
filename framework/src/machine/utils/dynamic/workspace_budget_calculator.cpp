@@ -93,9 +93,9 @@ static void BuildTensorWorkspaceFromDescriptor(WorkspaceDesc& desc, uint32_t sti
     }
     desc.maxRootInnerSpilledMem = maxInner;
     desc.maxRootTotalExclusiveOutcastMem = maxExclusive;
-    desc.devTaskBoundaryOutcastNum = desc.totalExclusiveOutcastSlot * SLOTS_NEED_ALLOC_SIZE +
-                                     desc.totalAssembleOutcastSlot * SLOTS_NEED_ALLOC_SIZE;
-    desc.devTaskInnerTemporalOutcastNum = desc.totalAssembleOutcastSlot * stitchDepthK * SLOTS_NEED_ALLOC_SIZE;
+    desc.devTaskBoundaryOutcastNum = desc.totalExclusiveOutcastSlot * SLOTS_NEED_ALLOC_SIZE;
+    desc.devTaskInnerTemporalOutcastNum = desc.maxRootAssembleOutcastSlot * stitchDepthK +
+                                          desc.totalAssembleOutcastSlot;
 }
 
 static uint64_t WorkspaceTotalFromDesc(const WorkspaceDesc& desc, uint32_t parallelism, uint64_t aicoreSpilled,
@@ -175,11 +175,9 @@ static void ComputeTensorBudgetLinearCoeffs(const WorkspaceDesc& desc, uint64_t&
         maxAlignedExclusive = MaxU64(maxAlignedExclusive,
                                      AlignUp(root.rootTotalExclusiveOutcastRawMem, TENSOR_ADDR_ALIGNMENT));
     }
-    const uint64_t boundaryFixed = desc.totalExclusiveOutcastSlot * SLOTS_NEED_ALLOC_SIZE +
-                                   desc.totalAssembleOutcastSlot * SLOTS_NEED_ALLOC_SIZE;
-    c0 = desc.maxStaticOutcastMem * boundaryFixed;
-    c1 = maxAlignedInner + maxAlignedExclusive +
-         desc.maxStaticOutcastMem * desc.totalAssembleOutcastSlot * SLOTS_NEED_ALLOC_SIZE;
+    const uint64_t boundaryFixed = desc.totalExclusiveOutcastSlot * SLOTS_NEED_ALLOC_SIZE;
+    c0 = desc.maxStaticOutcastMem * (boundaryFixed + desc.totalAssembleOutcastSlot);
+    c1 = maxAlignedInner + maxAlignedExclusive + desc.maxStaticOutcastMem * desc.maxRootAssembleOutcastSlot;
 }
 
 // Loose upper bound for binary-search range only (not the final k_eff).
@@ -345,9 +343,8 @@ void PopulateFixedOutcastLayout(const WorkspaceDesc& desc, PreciseWorkspaceLayou
 {
     layout.rootInnerUnitBytes = MaxRootInnerUnitBytes(desc);
     layout.exclusiveUnitBytes = MaxExclusiveOutcastUnitBytes(desc);
-    layout.assembleSlotsPerDepth = desc.totalAssembleOutcastSlot;
-    layout.fixedBoundarySlots = desc.totalExclusiveOutcastSlot * SLOTS_NEED_ALLOC_SIZE +
-                                desc.totalAssembleOutcastSlot * SLOTS_NEED_ALLOC_SIZE;
+    layout.assembleSlotsPerDepth = desc.maxRootAssembleOutcastSlot;
+    layout.fixedBoundarySlots = desc.totalExclusiveOutcastSlot * SLOTS_NEED_ALLOC_SIZE;
 }
 
 PreciseWorkspaceLayout CalculatePreciseWorkspaceLayout(const WorkspaceDesc& desc,
@@ -361,8 +358,8 @@ PreciseWorkspaceLayout CalculatePreciseWorkspaceLayout(const WorkspaceDesc& desc
 
     const uint64_t rootInnerBytes = layout.rootInnerUnitBytes * layout.rootInnerDepth;
     const uint64_t exclusiveBytes = layout.exclusiveUnitBytes * layout.exclusiveOutcastDepth;
-    const uint64_t innerTemporalSlots = layout.assembleSlotsPerDepth * layout.innerTemporalOutcastDepth *
-                                        SLOTS_NEED_ALLOC_SIZE;
+    const uint64_t innerTemporalSlots = layout.assembleSlotsPerDepth * layout.innerTemporalOutcastDepth +
+                                        desc.totalAssembleOutcastSlot;
     const uint64_t slottedBytes = (layout.fixedBoundarySlots + innerTemporalSlots) * desc.maxStaticOutcastMem;
     const uint64_t tensorRawPerParallel = rootInnerBytes + exclusiveBytes + slottedBytes;
     const uint64_t tensorTotal = AlignUp(tensorRawPerParallel, kAlignment32K) * runtimeCfg.parallelism;
@@ -429,8 +426,8 @@ StitchDepthConfig ResolveStitchDepthConfig(WorkspaceDesc& desc, const RuntimeWor
         desc.maxRootInnerSpilledMem = layout.rootInnerUnitBytes * layout.rootInnerDepth;
         desc.maxRootTotalExclusiveOutcastMem = layout.exclusiveUnitBytes * layout.exclusiveOutcastDepth;
         desc.devTaskBoundaryOutcastNum = layout.fixedBoundarySlots;
-        desc.devTaskInnerTemporalOutcastNum = layout.assembleSlotsPerDepth * layout.innerTemporalOutcastDepth *
-                                              SLOTS_NEED_ALLOC_SIZE;
+        desc.devTaskInnerTemporalOutcastNum = layout.assembleSlotsPerDepth * layout.innerTemporalOutcastDepth +
+                                              desc.totalAssembleOutcastSlot;
         return config;
     }
 

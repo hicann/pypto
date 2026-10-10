@@ -158,6 +158,7 @@ WorkspaceDesc MakeLinearBudgetDesc(uint64_t maxStaticOutcastMem, uint64_t totalE
     desc.maxStaticOutcastMem = maxStaticOutcastMem;
     desc.totalExclusiveOutcastSlot = totalExclusiveOutcastSlot;
     desc.totalAssembleOutcastSlot = totalAssembleOutcastSlot;
+    desc.maxRootAssembleOutcastSlot = totalAssembleOutcastSlot;
     WorkspaceDesc::WorkspacePerRootFunctionDesc profile;
     profile.unroll = 1;
     profile.rootInnerSpilledRawMem = rootInnerSpilledRawMem;
@@ -556,6 +557,7 @@ TEST_F(TestDevEncode, test_workspace_budget_calculator_unroll_ge_depth)
     desc.maxStaticOutcastMem = 200;
     desc.totalExclusiveOutcastSlot = 2;
     desc.totalAssembleOutcastSlot = 1;
+    desc.maxRootAssembleOutcastSlot = 1;
 
     WorkspaceDesc::WorkspacePerRootFunctionDesc lowUnroll;
     lowUnroll.unroll = 1;
@@ -687,6 +689,7 @@ TEST_F(TestDevEncode, test_memory_driven_ctrlflow_backup_decoupled_from_stitch_n
     desc.maxStaticOutcastMem = 4096;
     desc.totalExclusiveOutcastSlot = 0;
     desc.totalAssembleOutcastSlot = 2;
+    desc.maxRootAssembleOutcastSlot = 2;
 
     WorkspaceDesc::WorkspacePerRootFunctionDesc profile;
     profile.unroll = 1;
@@ -713,8 +716,8 @@ TEST_F(TestDevEncode, test_memory_driven_ctrlflow_backup_decoupled_from_stitch_n
 
     const uint64_t alignedBackupCount = requiredSlotBlocks;
     EXPECT_GE(alignedBackupCount, requiredSlotBlocks);
-    EXPECT_EQ(alignedBackupCount,
-              desc.totalAssembleOutcastSlot * depth.kEff * SLOTS_NEED_ALLOC_SIZE + desc.devTaskBoundaryOutcastNum);
+    EXPECT_EQ(alignedBackupCount, desc.maxRootAssembleOutcastSlot * depth.kEff + desc.totalAssembleOutcastSlot +
+                                      desc.devTaskBoundaryOutcastNum);
 }
 
 TEST_F(TestDevEncode, test_derive_k_eff_matches_brute_force)
@@ -809,6 +812,74 @@ TEST_F(TestDevEncode, test_workspace_flex_io_outcast_skips_assemble_mark)
     (void)ResolveStitchDepthConfig(flexWs, MakeNonMemoryDrivenCfg(stitchNumMax));
     EXPECT_EQ(flexWs.totalAssembleOutcastSlot, 0u);
     EXPECT_LT(flexWs.devTaskBoundaryOutcastNum, devProg->slotSize * stitchNumMax);
+}
+
+// Loop1: two Assembles; Loop2: one Assemble; Loop3: read all.
+// Expect: A_i = [2,1,0] → A=3, A_max=2; IT = A_max×k + A = 2×8 + 3 = 19.
+TEST_F(TestDevEncode, test_workspace_first_loop_two_assembles)
+{
+    Program::GetInstance().Reset();
+    config::Reset();
+    config::SetPlatformConfig(KEY_ENABLE_AIHAC_BACKEND, true);
+    constexpr uint32_t kStitch = 8;
+    config::SetRuntimeOption(STITCH_FUNCTION_MAX_NUM, static_cast<int>(kStitch));
+    TileShape::Current().SetVecTile(16, 16);
+    TileShape::Current().SetCubeTile({16, 16}, {16, 16}, {16, 16});
+
+    constexpr int s = 32;
+    Tensor x(DT_FP32, {s, s}, "x");
+    Tensor out(DT_FP32, {s, s}, "out");
+
+    FUNCTION("first_loop_two_assemble", {x}, {out})
+    {
+        Tensor bufA(DT_FP32, {s, s}, "bufA");
+        Tensor bufB(DT_FP32, {s, s}, "bufB");
+        Tensor bufC(DT_FP32, {s, s}, "bufC");
+        LOOP("Loop_asm_two", FunctionType::DYNAMIC_LOOP, ia, LoopRange(1))
+        {
+            (void)ia;
+            auto tmpA = Add(x, x);
+            auto tmpB = Add(x, x);
+            Assemble(tmpA, {0, 0}, bufA);
+            Assemble(tmpB, {0, 0}, bufB);
+        }
+        LOOP("Loop_asm_one", FunctionType::DYNAMIC_LOOP, ib, LoopRange(1))
+        {
+            (void)ib;
+            auto tmpC = Add(x, x);
+            Assemble(tmpC, {0, 0}, bufC);
+        }
+        LOOP("Loop_read_all", FunctionType::DYNAMIC_LOOP, ir, LoopRange(1))
+        {
+            (void)ir;
+            out = Add(Add(bufA, bufB), bufC);
+        }
+    }
+
+    Function* func = Program::GetInstance().GetLastFunction();
+    ASSERT_NE(func, nullptr);
+    auto dyndev = func->GetDyndevAttribute();
+    ASSERT_NE(dyndev, nullptr);
+    DevAscendProgram* devProg = reinterpret_cast<DevAscendProgram*>(dyndev->devProgBinary.data());
+    ASSERT_NE(devProg, nullptr);
+
+    const uint64_t progAddr = reinterpret_cast<uint64_t>(devProg);
+    devProg->RelocProgram(0, progAddr);
+    WorkspaceDesc flex = CollectWorkspaceDesc(func, *devProg, dyndev->constructAssembleNeedAllocRuntimeSlots);
+    devProg->RelocProgram(progAddr, 0);
+
+    ASSERT_EQ(flex.rootFuncDescList.size(), 3u);
+    EXPECT_EQ(flex.totalAssembleOutcastSlot, dyndev->constructAssembleNeedAllocRuntimeSlots.size());
+    EXPECT_EQ(flex.totalAssembleOutcastSlot, 3u);
+    EXPECT_EQ(flex.maxRootAssembleOutcastSlot, 2u);
+
+    WorkspaceDesc flexWs = flex;
+    const StitchDepthConfig depth = ResolveStitchDepthConfig(flexWs, MakeNonMemoryDrivenCfg(kStitch));
+    EXPECT_EQ(depth.kEff, kStitch);
+    // IT = A_max×k + A = 2×8 + 3 = 19
+    EXPECT_EQ(flexWs.devTaskInnerTemporalOutcastNum,
+              flex.maxRootAssembleOutcastSlot * kStitch + flex.totalAssembleOutcastSlot);
+    EXPECT_EQ(flexWs.devTaskInnerTemporalOutcastNum, 19u);
 }
 
 // reshape(inplace=true) on a function input still lands in IncastOutcastLink::assembleSlotIndexList, but codegen
@@ -1090,6 +1161,7 @@ TEST_F(TestDevEncode, test_workspace_budget_parallelism)
     desc.maxStaticOutcastMem = 8192;
     desc.totalExclusiveOutcastSlot = 2;
     desc.totalAssembleOutcastSlot = 1;
+    desc.maxRootAssembleOutcastSlot = 1;
 
     WorkspaceDesc::WorkspacePerRootFunctionDesc profile;
     profile.unroll = 2;
