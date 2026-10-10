@@ -314,8 +314,8 @@ void BpCheckConvOperands(DataType outType, const Tensor& gradOutputTensor, const
           outType == DataType::DT_FP32 || outType == DataType::DT_FP16 || outType == DataType::DT_BF16)
         << "Unsupported output data type. Only DT_FP32, DT_FP16, DT_BF16 are supported.";
     BpCheckOriginShape(gradOutputTensor, inputSize, weightTensor, biasTensor);
-    BpCheckOutputShape(gradOutputTensor, inputSize, weightTensor, attrParam);
     BpCheckAttrShape(gradOutputTensor, weightTensor, attrParam);
+    BpCheckOutputShape(gradOutputTensor, inputSize, weightTensor, attrParam);
     BpCheckTileTiling(outType, gradOutputTensor, weightTensor, attrParam, inputSize);
     BpCheckL1SizeTiling(outType, gradOutputTensor, weightTensor, biasTensor, attrParam, inputSize);
 }
