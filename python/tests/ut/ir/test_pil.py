@@ -13,7 +13,7 @@ import pytest
 
 import pypto
 from pypto import ir, logging, pil
-from pypto.pil.ops import has_scalar
+from pypto.pil.ops import has_scalar, is_loop_end_impl
 
 # ---------- Ops compile tests ----------
 
@@ -1172,6 +1172,25 @@ def test_nested_is_loop_begin():
             bar(i)
 
     pil.compile(foo, has_move=False)
+
+
+@pytest.mark.parametrize(
+    ("start", "stop", "step", "expected"),
+    [
+        (0, 5, 2, [False, False, True]),
+        (0, 6, 4, [False, True]),
+        (5, -1, -2, [False, False, True]),
+        (6, -1, -2, [False, False, False, True]),
+        (5, 0, -2, [False, False, True]),
+    ],
+)
+def test_is_loop_end_handles_positive_and_negative_steps(start, stop, step, expected):
+    ctx = SimpleNamespace(loop_stack=[(start, stop, step)])
+    flags = []
+    for index in range(start, stop, step):
+        condition = is_loop_end_impl(ctx, pypto.SymbolicScalar(index))
+        flags.append(pypto.SymbolicScalar.check([condition]) == pypto.SatStatus.SAT)
+    assert flags == expected
 
 
 def test_config_scope():

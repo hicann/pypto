@@ -306,7 +306,7 @@ def is_loop_end_impl(ctx: BuildContext, scalar: SymbolicScalar):
     _, end, step = ctx.loop_stack[-1]
     assert isinstance(end, (SymbolicScalar, int)), "is_loop_end() must be called in a pypto.loop"
     assert isinstance(step, (SymbolicScalar, int)), "is_loop_end() must be called in a pypto.loop"
-    return scalar + step >= end
+    return ((step > 0) & (scalar + step >= end)) | ((step < 0) & (scalar + step <= end))
 
 
 @impl(pypto.cond)
