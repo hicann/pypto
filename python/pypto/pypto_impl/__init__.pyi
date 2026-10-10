@@ -736,7 +736,7 @@ class MatmulExtendParam:
 
     @overload
     def __init__(self, bias_tensor: Tensor, scale_tensor: Tensor,
-                 scale: int = 0, relu_type: ReLuType = ReLuType.NoReLu,
+                 scale: float = 0.0, relu_type: ReLuType = ReLuType.NO_RELU,
                  trans_mode: TransMode = TransMode.CAST_NONE): ...
 
 
@@ -747,7 +747,7 @@ def Matmul(dtype: DataType, a: Tensor, b: Tensor, a_trans: bool = False,
 
 @overload
 def Matmul(dtype: DataType, a: Tensor, b: Tensor, a_trans: bool = False,
-           b_trans: bool = False, c_matrix_nz: bool = False, extend_params: MatmulExtendParam = None) -> Tensor: ...
+           b_trans: bool = False, c_matrix_nz: bool = False, extend_params: MatmulExtendParam = ...) -> Tensor: ...
 
 
 @overload
@@ -758,7 +758,7 @@ def MatmulMX(dtype: DataType, a: Tensor, aScale: Tensor, b: Tensor, bScale: Tens
 @overload
 def MatmulMX(dtype: DataType, a: Tensor, aScale: Tensor, b: Tensor, bScale: Tensor, a_trans: bool = False,
              a_scale_trans: bool = False, b_trans: bool = False, b_scale_trans: bool = False,
-             c_matrix_nz: bool = False, extend_params: MatmulExtendParam = None) -> Tensor: ...
+             c_matrix_nz: bool = False, extend_params: MatmulExtendParam = ...) -> Tensor: ...
 
 
 @overload
@@ -768,9 +768,10 @@ def BatchMatmul(dtype: DataType, a: Tensor, b: Tensor, a_trans: bool = False,
 
 @overload
 def BatchMatmul(dtype: DataType, a: Tensor, b: Tensor, a_trans: bool = False, b_trans: bool = False,
-                 c_matrix_nz: bool = False, extend_params: MatmulExtendParam = None) -> Tensor: ...
+                 c_matrix_nz: bool = False, extend_params: MatmulExtendParam = ...) -> Tensor: ...
 
 
+@overload
 def BatchMatmulMX(dtype: DataType, a: Tensor, aScale: Tensor, b: Tensor, bScale: Tensor, a_trans: bool = False,
              a_scale_trans: bool = False, b_trans: bool = False, b_scale_trans: bool = False,
              c_matrix_nz: bool = False) -> Tensor: ...
@@ -779,7 +780,7 @@ def BatchMatmulMX(dtype: DataType, a: Tensor, aScale: Tensor, b: Tensor, bScale:
 @overload
 def BatchMatmulMX(dtype: DataType, a: Tensor, aScale: Tensor, b: Tensor, bScale: Tensor, a_trans: bool = False,
              a_scale_trans: bool = False, b_trans: bool = False, b_scale_trans: bool = False,
-             c_matrix_nz: bool = False, extend_params: MatmulExtendParam = None) -> Tensor: ...
+             c_matrix_nz: bool = False, extend_params: MatmulExtendParam = ...) -> Tensor: ...
 
 
 @overload
