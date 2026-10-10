@@ -50,10 +50,10 @@ Most sample scripts support running all tests or specifying a specific test:
 python3 examples/01_beginner/basic/basic_ops.py
 
 # Run a specific sample
-python3 examples/01_beginner/basic/basic_ops.py matmul::test_matmul
+python3 examples/01_beginner/basic/basic_ops.py --tests matmul
 
-# List all available samples in the script
-python3 examples/01_beginner/basic/basic_ops.py --list
+# Show all available samples and options
+python3 examples/01_beginner/basic/basic_ops.py --help
 
 # Specify simulation (CPU) mode
 python3 examples/01_beginner/basic/basic_ops.py --run_mode sim

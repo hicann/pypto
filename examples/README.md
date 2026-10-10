@@ -50,10 +50,10 @@ export TILE_FWK_DEVICE_ID=0
 python3 examples/01_beginner/basic/basic_ops.py
 
 # 运行特定的样例
-python3 examples/01_beginner/basic/basic_ops.py matmul::test_matmul
+python3 examples/01_beginner/basic/basic_ops.py --tests matmul
 
-# 列出脚本中所有可用的样例
-python3 examples/01_beginner/basic/basic_ops.py --list
+# 显示脚本中所有可用的样例和选项
+python3 examples/01_beginner/basic/basic_ops.py --help
 
 # 指定以仿真（CPU）模式运行
 python3 examples/01_beginner/basic/basic_ops.py --run_mode sim
