@@ -97,11 +97,20 @@ public:
 
     int PushTask(DynDeviceTask* dynTask, DeviceExecuteContext* ctx)
     {
+        if (unlikely(ctx->GetErrorState() != DEVICE_MACHINE_OK)) {
+            return 0;
+        }
         DEV_VERBOSE_DEBUG("#trace.dtask.built: dtaskId %lu", dynTask->GetIndex());
 
         if (AicoreResolveEnabled()) {
             if (!ctx->devProg->ctrlFlowCacheAnchor->IsRecording()) {
-                DrcoDeviceTaskReadyQueueAppend(dynTask->dynFuncDataList, dynTask->drcoRootFuncList);
+                int ret = DrcoDeviceTaskReadyQueueAppend(dynTask->dynFuncDataList, dynTask->drcoRootFuncList);
+                if (ret != DEVICE_MACHINE_OK) {
+                    ctx->SetErrorState(ret);
+                    DEV_ERROR(CtrlErr::CTRL_ALLOC_TIMEOUT, "#ctrl.push: DrcoDeviceTaskReadyQueueAppend failed, ret=%d.",
+                              ret);
+                    return ret;
+                }
                 DEV_DEBUG("DRCO append task=%p root=%p qtail=%u", dynTask->dynFuncDataList, dynTask->drcoRootFuncList,
                           GetDeviceTaskReadyQueue().tail);
             }
@@ -109,7 +118,8 @@ public:
         }
 
         auto idx = AllocNewTaskCtrl();
-        if (idx < 0) {
+        if (idx == DEVICE_MACHINE_ERROR) {
+            ctx->SetErrorState(idx);
             DEV_ERROR(CtrlErr::CTRL_ALLOC_TIMEOUT, "#ctrl.push.alloc: AllocNewTaskCtrl failed, idx=%d.", idx);
             return idx;
         }
@@ -139,10 +149,13 @@ public:
         return idx;
     }
 
-    void StopAicoreManager()
+    void StopAicoreManager(DeviceExecuteContext* ctx)
     {
         if (AicoreResolveEnabled()) {
-            DrcoDeviceTaskReadyQueueAppend(nullptr, nullptr);
+            int ret = DrcoDeviceTaskReadyQueueAppend(nullptr, nullptr);
+            if (ret != DEVICE_MACHINE_OK) {
+                ctx->SetErrorState(ret);
+            }
         } else {
             for (uint32_t i = 0; i < GetScheAicpuNum(); ++i) {
                 GetTaskQueue(i).Enqueue(nullptr);
@@ -389,10 +402,14 @@ public:
         PerfBegin(PERF_EVT_STAGE_STOP_AICORE);
         if (!devProg->ctrlFlowCacheAnchor->IsRecording()) {
             // host cache not need to enque
-            StopAicoreManager();
+            StopAicoreManager(&ctx);
         }
         PerfEnd(PERF_EVT_STAGE_STOP_AICORE);
         DEV_INFO("aicore manager stopped");
+        if (ctx.GetErrorState() != DEVICE_MACHINE_OK) {
+            DeviceTrace::GetInstance().ReportTraceMsg();
+            return ctx.GetErrorState();
+        }
         PerfEnd(PERF_EVT_EXEC_DYN);
 #if ENABLE_PERF_EVT
         ctx.ShowStats();

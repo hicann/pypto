@@ -498,6 +498,9 @@ int DeviceExecuteContext::SubmitToAicoreAndRecycleMemory(bool withoutTail, bool 
 
     currentMaxC_ = 0;
     currentMaxV_ = 0;
+    if (unlikely(GetErrorState() != DEVICE_MACHINE_OK)) {
+        return DEVICE_MACHINE_ERROR;
+    }
     return ret;
 }
 
