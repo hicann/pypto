@@ -164,7 +164,7 @@ static inline void RuntimeYield(uint64_t microseconds = 0)
     std::this_thread::sleep_for(std::chrono::microseconds(microseconds));
 }
 
-#define DEFAULT_RUNTIME_DATA_RING_BUFFER_COUNT 4
+#define DEFAULT_RUNTIME_DATA_RING_BUFFER_COUNT 2
 struct RuntimeDataRingBufferHead : RuntimeDataRingBufferHeadData {
 public:
     void Initialize(uint64_t runtimeDataSizeArg, uint64_t runtimeDataCountArg, ArchInfo arch = ArchInfo::DAV_2201)
